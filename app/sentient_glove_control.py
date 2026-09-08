@@ -71,7 +71,7 @@ class KeyPicker(QtWidgets.QComboBox):
         self.addItem("")
         for name, _ in SPECIAL_KEYS:
             self.addItem(name)
-        self.setFixedWidth(118)
+        self.setFixedWidth(112)
         self.lineEdit().setObjectName("keycap")
         self.setToolTip("Type one character, or choose a special key")
 
@@ -80,6 +80,42 @@ class KeyPicker(QtWidgets.QComboBox):
 
     def code(self):
         return label_to_code(self.currentText())
+
+
+MODS = [("Ctrl", 1), ("Shift", 2), ("Alt", 4), ("Win", 8)]
+
+
+class KeyCell(QtWidgets.QWidget):
+    """One gesture binding: modifier tickboxes + key picker."""
+
+    def __init__(self):
+        super().__init__()
+        lay = QtWidgets.QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(3)
+        self.picker = KeyPicker()
+        lay.addWidget(self.picker, 0, QtCore.Qt.AlignmentFlag.AlignHCenter)
+        row = QtWidgets.QHBoxLayout()
+        row.setSpacing(6)
+        self.boxes = {}
+        for name, bit in MODS:
+            cb = QtWidgets.QCheckBox(name)
+            self.boxes[bit] = cb
+            row.addWidget(cb)
+        lay.addLayout(row)
+
+    def set_binding(self, mods: int, code: int):
+        self.picker.set_code(code)
+        for bit, cb in self.boxes.items():
+            cb.setChecked(bool(mods & bit))
+
+    def binding(self):
+        """(mods, code) or None if the key text is unrecognised."""
+        code = self.picker.code()
+        if code is None:
+            return None
+        mods = sum(bit for bit, cb in self.boxes.items() if cb.isChecked())
+        return mods, code
 
 ACCENT = "#00e5ff"
 ACCENT2 = "#1de9b6"
@@ -123,6 +159,11 @@ QLineEdit#keycap {{
     qproperty-alignment: AlignCenter;
     border: none; background: transparent;
 }}
+QCheckBox {{ color: #6f9aa6; font-size: 10px; letter-spacing: 1px; spacing: 3px; }}
+QCheckBox::indicator {{
+    width: 11px; height: 11px; border: 1px solid #1a4a5a; border-radius: 3px; background: #091018;
+}}
+QCheckBox::indicator:checked {{ background: {ACCENT}; border-color: {ACCENT}; }}
 QComboBox QAbstractItemView {{
     background: #091018; color: {TEXT}; selection-background-color: #145a6e;
     border: 1px solid #1a4a5a;
@@ -300,8 +341,9 @@ class SetupDialog(QtWidgets.QDialog):
         lay.addRow(head)
         self.edits = {}
         for slot, label in SLOTS:
-            e = KeyPicker()
-            e.set_code(current.get(slot, 0))
+            e = KeyCell()
+            m, c = current.get(slot, (0, 0))
+            e.set_binding(m, c)
             self.edits[slot] = e
             lay.addRow(label, e)
         bb = QtWidgets.QDialogButtonBox(
@@ -314,9 +356,9 @@ class SetupDialog(QtWidgets.QDialog):
     def values(self):
         out = {}
         for slot, e in self.edits.items():
-            c = e.code()
-            if c is not None:
-                out[slot] = c
+            b = e.binding()
+            if b is not None:
+                out[slot] = b
         return out
 
 
@@ -325,7 +367,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Sentient Glove Control")
-        self.resize(980, 640)
+        self.resize(1120, 680)
         self.setStyleSheet(QSS)
 
         self.worker = None
@@ -387,7 +429,7 @@ class MainWindow(QtWidgets.QMainWindow):
                            QtCore.Qt.AlignmentFlag.AlignHCenter)
             row = {}
             for col, (slot, _label) in enumerate(SLOTS, start=1):
-                e = KeyPicker()
+                e = KeyCell()
                 grid.addWidget(e, f + 1, col, QtCore.Qt.AlignmentFlag.AlignHCenter)
                 row[slot] = e
             self.key_edits.append(row)
@@ -495,15 +537,12 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         if s.startswith("MAP,"):
             parts = s.split(",")
-            if len(parts) == 5:
-                try:
-                    f = int(parts[1])
-                except ValueError:
-                    return
+            if len(parts) == 8 and all(p.isdigit() for p in parts[1:]):
+                f = int(parts[1])
                 if 0 <= f < FINGERS:
-                    for (slot, _), val in zip(SLOTS, parts[2:5]):
-                        if val.isdigit():
-                            self.key_edits[f][slot].set_code(int(val))
+                    vals = [int(p) for p in parts[2:8]]
+                    for i, (slot, _) in enumerate(SLOTS):
+                        self.key_edits[f][slot].set_binding(vals[2 * i], vals[2 * i + 1])
             return
         if s.startswith("EV,"):
             parts = s.split(",")
@@ -526,12 +565,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self._log(s)
 
     def run_setup(self, f: int):
-        current = {slot: (self.key_edits[f][slot].code() or 0) for slot, _ in SLOTS}
+        current = {slot: (self.key_edits[f][slot].binding() or (0, 0)) for slot, _ in SLOTS}
         dlg = SetupDialog(f, current, self)
         if dlg.exec():
-            for slot, code in dlg.values().items():
-                self._send(f"SET,{f},{slot},{code}")
-                self.key_edits[f][slot].set_code(code)
+            for slot, (mods, code) in dlg.values().items():
+                self._send(f"SET,{f},{slot},{mods},{code}")
+                self.key_edits[f][slot].set_binding(mods, code)
             self._log(f"finger {f + 1}: mapping saved")
 
     def apply_all(self):
@@ -541,11 +580,12 @@ class MainWindow(QtWidgets.QMainWindow):
         n, bad = 0, []
         for f in range(FINGERS):
             for slot, _ in SLOTS:
-                code = self.key_edits[f][slot].code()
-                if code is None:
+                b = self.key_edits[f][slot].binding()
+                if b is None:
                     bad.append(f"F{f + 1} {dict(SLOTS)[slot].lower()}")
                     continue
-                self._send(f"SET,{f},{slot},{code}")
+                mods, code = b
+                self._send(f"SET,{f},{slot},{mods},{code}")
                 n += 1
         self._log(f"sent {n} mapping(s)" + (f"; unrecognised: {', '.join(bad)}" if bad else ""))
 
