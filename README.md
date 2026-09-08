@@ -29,8 +29,8 @@ Because the dongle is a plain USB keyboard, it works on any machine with no driv
 
 | Path | What it is |
 |---|---|
-| `firmware/glove_sender_v3.ino` | Glove firmware: sensor reading, gesture engine, heartbeat, LED |
-| `firmware/dongle_hid_v3.ino` | Dongle firmware: ESP-NOW receiver, USB HID keyboard, keymap storage, serial protocol |
+| `firmware/glove_sender_v2.ino` | Glove firmware: sensor reading, gesture engine, heartbeat, LED |
+| `firmware/dongle_hid_v4.ino` | Dongle firmware: ESP-NOW receiver, USB HID keyboard, keymap storage, serial protocol |
 | `app/sentient_glove_control.py` | PyQt6 desktop configurator |
 | `hardware/` | Enclosure CAD (Fusion 360) and bill of materials |
 
@@ -81,7 +81,7 @@ The XIAO's user LED (GPIO21) flashes briefly every two seconds while the glove i
 
 Both boards are programmed from the Arduino IDE with the **esp32** board package (3.x) installed via Boards Manager. Use **Arduino IDE 2.x** — on Ubuntu, install it from arduino.cc, not the snap, and add yourself to the `dialout` group.
 
-### Glove — `glove_sender_v3.ino`
+### Glove — `glove_sender_v2.ino`
 
 Board: your XIAO ESP32S3 / ESP32S3 Dev Module. Default USB settings. Flash normally.
 
@@ -93,7 +93,7 @@ const uint8_t fsrPins[NUM]     = {1, 5, 3};
 const bool    dtapEnabled[NUM] = {true, true, true};
 ```
 
-### Dongle — `dongle_hid_v3.ino`
+### Dongle — `dongle_hid_v4.ino`
 
 Board settings that matter:
 
@@ -118,15 +118,15 @@ Both boards are hard-coded to radio channel 6 in long-range mode and must match.
 
 ### Gestures
 
-Every finger supports three independent gestures, each mapped to its own key:
+Every finger supports three independent gestures. Each is mapped to a **binding**: any combination of Ctrl / Shift / Alt / Win plus one key.
 
-| Gesture | How | Default keys (F1 / F2 / F3) |
+| Gesture | How | Default bindings (F1 / F2 / F3) |
 |---|---|---|
-| **Tap** | Press and release within 400 ms | `a` / `b` / `c` |
+| **Tap** | Press and release within 400 ms | `a` / `Ctrl+Alt+J` / `Enter` |
 | **Double tap** | Two taps within 250 ms | `A` / `B` / `C` |
-| **Long press** | Hold longer than 400 ms | `F13` / `F14` / `F15` |
+| **Long press** | Hold longer than 400 ms | `Ctrl+Alt+R` / `F14` / `F15` |
 
-Long press behaves like holding a real key: the key goes **down** at the 400 ms mark and comes **up** when you let go. This is how push-to-talk works — map the long press to your PTT key.
+Long press behaves like holding real keys: the whole combination goes **down** at the 400 ms mark and comes **up** when you let go. This is how push-to-talk works — e.g. finger 1 long press = `Ctrl+Alt+R` held for as long as the finger is down. Modifiers are reference-counted on the dongle, so tapping another finger's combo while a PTT combo is held never releases the shared modifiers.
 
 F13–F24 are the recommended PTT keys: no application uses them by default, so they never collide with anything. Bind them in Discord, TeamSpeak or your game.
 
@@ -159,7 +159,7 @@ Runs on Windows, macOS and Linux. On Linux you need read/write access to the don
 
 **Dongle Link** — click **SCAN**, choose the dongle's port, click **CONNECT**. The status indicator turns green (`GLOVE ONLINE`) as soon as heartbeats arrive from the glove. `SERIAL ONLY — NO GLOVE` means the dongle is connected but the glove is off or out of range.
 
-**Key Mapping** — a grid of finger × gesture. Each cell is a picker: choose a named key from the dropdown (Enter, Backspace, Tab, Esc, Space, Delete, Home/End, Page Up/Down, arrows, Ctrl/Shift/Alt/Win, F1–F24) or type a single character. Leave a cell blank to unassign that gesture.
+**Key Mapping** — a grid of finger × gesture. Each cell is a key picker with **Ctrl / Shift / Alt / Win** tickboxes beneath it: choose a named key from the dropdown (Enter, Backspace, Tab, Esc, Space, Delete, Home/End, Page Up/Down, arrows, F1–F24) or type a single character, then tick the modifiers you want combined with it. Leave the key blank to unassign that gesture (or blank with modifiers ticked for a modifier-only binding).
 - **READ FROM DEVICE** pulls the current map from the dongle.
 - **APPLY ALL** writes every cell to the dongle's flash.
 
@@ -174,9 +174,9 @@ The app is optional — anything that speaks 115200-baud serial can configure th
 | Direction | Message | Meaning |
 |---|---|---|
 | PC → dongle | `GET` | Request the keymap |
-| PC → dongle | `SET,f,slot,code` | Set finger `f` (0–5), slot `t`/`d`/`l` (tap/double/long), to HID keycode `code` (0–255; 0 = none) |
+| PC → dongle | `SET,f,slot,mods,code` | Set finger `f` (0–5), slot `t`/`d`/`l` (tap/double/long): `mods` bitmask (1 Ctrl, 2 Shift, 4 Alt, 8 Win) + HID keycode `code` (0–255; 0 = none) |
 | dongle → PC | `READY` | Booted |
-| dongle → PC | `MAP,f,tap,dtap,long` | One line per finger, keycodes as decimals |
+| dongle → PC | `MAP,f,tm,tk,dm,dk,lm,lk` | One line per finger: mods,key for tap, double-tap, long press |
 | dongle → PC | `EV,f,code` | Gesture received: 1 tap, 2 double, 3 long start, 4 long end, 5 setup |
 | dongle → PC | `HB,rssi` | Heartbeat with link RSSI in dBm (every ~400 ms) |
 | dongle → PC | `SETUP,f` | Glove requested setup for finger `f` |
@@ -203,7 +203,7 @@ Keycodes follow the Arduino keyboard convention: printable characters are their 
 ## Roadmap
 
 - Battery percentage reported to the app (spare byte in the heartbeat)
-- Key combinations / macros per gesture
+- Multi-key macros / sequences per gesture
 - Media keys (volume, play/pause)
 - Per-finger settings in the app (double-tap enable, timing)
 
