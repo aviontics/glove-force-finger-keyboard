@@ -1,5 +1,5 @@
 // ============================================================
-// SENTIENT GLOVE - DONGLE v2  (USB receiver side)
+// SENTIENT GLOVE - DONGLE v3  (USB receiver side)
 // Board: ESP32-S3. Tools -> USB Mode: "USB-OTG (TinyUSB)",
 //                  USB CDC On Boot: Enabled
 // USB HID keyboard + CDC serial protocol for the desktop app.
