@@ -29,7 +29,7 @@ Because the dongle is a plain USB keyboard, it works on any machine with no driv
 
 | Path | What it is |
 |---|---|
-| `firmware/glove_sender_v2.ino` | Glove firmware: sensor reading, gesture engine, heartbeat, LED |
+| `firmware/glove_sender_v3.ino` | Glove firmware: sensor reading, gesture engine, heartbeat, LED |
 | `firmware/dongle_hid_v3.ino` | Dongle firmware: ESP-NOW receiver, USB HID keyboard, keymap storage, serial protocol |
 | `app/sentient_glove_control.py` | PyQt6 desktop configurator |
 | `hardware/` | Enclosure CAD (Fusion 360) and bill of materials |
@@ -81,7 +81,7 @@ The XIAO's user LED (GPIO21) flashes briefly every two seconds while the glove i
 
 Both boards are programmed from the Arduino IDE with the **esp32** board package (3.x) installed via Boards Manager. Use **Arduino IDE 2.x** — on Ubuntu, install it from arduino.cc, not the snap, and add yourself to the `dialout` group.
 
-### Glove — `glove_sender_v2.ino`
+### Glove — `glove_sender_v3.ino`
 
 Board: your XIAO ESP32S3 / ESP32S3 Dev Module. Default USB settings. Flash normally.
 
