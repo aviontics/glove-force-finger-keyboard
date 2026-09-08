@@ -1,5 +1,5 @@
 // ============================================================
-// SENTIENT GLOVE - SENDER v2  (glove side)
+// SENTIENT GLOVE - SENDER v3  (glove side)
 // Board: ESP32-S3 (XIAO ESP32S3 Plus or dev module)
 // Sensors: thin-film FSRs in DIGITAL mode -> each between GPIO and GND
 // Gestures: TAP / DOUBLE_TAP / LONG_START+END / 10s hold -> SETUP
